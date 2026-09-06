@@ -8,7 +8,9 @@ forward buttons, a sequence diagram, a "what to look for" checklist, and the rea
 Rows: **1 MAC address** (what it is, whose prefix it is, how to find your own on Windows, Linux
 and macOS), **2 Frame** (two machines on one switch: a frame with no IP inside, then ARP and a
 ping), **3 Frame vs packet** (the same ping captured on both sides of a router, compared field by
-field), **4 IPv6** (addresses, router and neighbour discovery, ping, and the header next to IPv4's).
+field), **4 IPv6** (addresses, router and neighbour discovery, ping, and the header next to IPv4's),
+**5 How a packet is built** (one small HTTP request with every layer inside it: headers go on from
+the top down and come off from the bottom up, and what a layer-2-only conversation can and cannot do).
 
 No frameworks, no build step: plain HTML, CSS and JavaScript. Published to GitHub Pages at
 <https://professorcam.github.io/frames/> by `.github/workflows/pages.yml` on every push to `main`.
@@ -39,6 +41,21 @@ Pages, the box explains why the server cannot see it.
 The page must be served over HTTP. Opening `site/index.html` from disk will not work, because the
 browser blocks `fetch()` of the `.pcap` files from `file://` URLs.
 
+## Reading level (Simple | Moderate | Engineer)
+
+The buttons at the top right of the page switch every explanation between three depths: **Simple**
+(a notch above "explain it like I'm five": the big idea in plain words), **Moderate** (beginner CCNA
+student, the default) and **Engineer** (the full technical detail, kept short). The choice is stored
+in the browser, and a link such as `index.html?level=simple` (or `moderate`, `engineer`) opens the
+site at that level.
+
+The mechanism is `site/level.js`, identical on every Packet Lessons site. In `site/lessons.js` any
+piece of prose can be a plain string (same at every level) or an object with `s`, `m` and `e`
+keys, and arrays of paragraphs may mix the two. A missing key falls back to Moderate; an empty
+string leaves that paragraph out at that level. Rows refer to each other with `{{row:id}}`, which
+becomes "row N" when the page is drawn, so reordering rows never breaks the text. Each row's `stack`
+field (`2`, `3`, `4`, `7`, or a word such as `tls`) groups the sidebar by layer.
+
 ## Layout
 
 ```
@@ -51,9 +68,10 @@ site/
   style.css          layout, diagram, animation and packet-table styling
   app.js             builds the nav, renders a lesson, loads and shows the packets
   lessons.js         ALL teaching content lives here, one object per row
-  pcap.js            tiny libpcap parser (Ethernet, raw frames, ARP, IPv4, ICMP, IPv6, ICMPv6, UDP, TCP)
+  level.js           the Simple | Moderate | Engineer toggle and the lv() text resolver
+  pcap.js            tiny libpcap parser (Ethernet, raw frames, ARP, IPv4, ICMP, IPv6, ICMPv6, UDP, TCP, HTTP)
   pcaps/*.pcap       the captures
-tools/make-captures.py   builds the four captures
+tools/make-captures.py   builds the five captures
 tools/rawframe.py        sends and answers frames with no IP inside (Linux, root)
 ```
 

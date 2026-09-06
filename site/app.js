@@ -4,6 +4,7 @@
 
   var nav = document.getElementById('nav');
   var main = document.getElementById('main');
+  var content = document.getElementById('content');
   var pcapCache = {};
 
   function esc(s) {
@@ -46,8 +47,19 @@
 
   /* ---------- left column ---------- */
 
+  var STACK_GROUPS = { 2: 'Layer 2 · Link', 3: 'Layer 3 · Network', 4: 'Layer 4 · Transport', 7: 'Layer 7 · Application', tls: 'Between 4 and 7 · TLS', files: 'Not packets · files', stack: 'All layers' };
+  var STACK_CHIPS = { 2: 'L2', 3: 'L3', 4: 'L4', 7: 'L7', tls: 'TLS', files: 'files', stack: 'L2–7' };
+
   function buildNav() {
+    var last = null;
     LESSONS.forEach(function (l, i) {
+      if (l.stack !== undefined && l.stack !== last) {
+        var g = document.createElement('div');
+        g.className = 'nav-group';
+        g.textContent = STACK_GROUPS[l.stack] || String(l.stack);
+        nav.appendChild(g);
+        last = l.stack;
+      }
       var b = document.createElement('button');
       b.className = 'row';
       b.type = 'button';
@@ -55,7 +67,8 @@
       b.innerHTML =
         '<span class="num">' + (i + 1) + '</span>' +
         '<span class="text"><span class="title">' + esc(l.title) + '</span>' +
-        '<span class="sub">' + esc(l.subtitle) + '</span></span>';
+        '<span class="sub">' + esc(l.subtitle) + '</span></span>' +
+        (l.stack !== undefined ? '<span class="lay">' + esc(l.chip || STACK_CHIPS[l.stack] || l.stack) + '</span>' : '');
       b.addEventListener('click', function () { location.hash = l.id; });
       nav.appendChild(b);
     });
@@ -137,10 +150,55 @@
         { id: 'fcs',  name: 'Check (FCS)',     bytes: 4,  width: 16, fields: ['CRC-32', 'added by the card', 'never captured'] }
       ],
       stages: [
-        { on: ['data'],                        hold: 3000, caption: 'Start with what we want to send: 58 bytes of text. The receiver is on the same LAN, so no IP header is needed at all: the frame can find it by MAC address alone.' },
-        { on: ['eth', 'data'],                 hold: 4200, caption: 'The 14-byte Ethernet header: destination MAC, source MAC, and a type code. 0x88b5 is reserved for experiments, so nothing on the LAN will mistake the text for IP. 72 bytes: this is frame 1 in the capture.' },
-        { on: ['eth', 'data', 'fcs'],          hold: 3800, caption: 'On the way out, the network card appends a 4-byte CRC-32 check. The receiving card verifies it and strips it before anyone else sees the frame, which is why captures never show it. 76 bytes on the wire.' },
-        { on: ['eth', 'data', 'fcs'], done: true, hold: 3000, caption: 'Sent. The switch reads the first six bytes, looks up which port 00:0c:29:7d:e3:5c is on, and sends the frame out of that port only.' }
+        { on: ['data'],                        hold: 3000, caption: {
+          s: 'Start with the message: a 58-character sentence. The other machine is on the same network, so no IP address is needed. The frame can find it by MAC address alone.',
+          m: 'Start with what we want to send: 58 bytes of text. The receiver is on the same LAN, so no IP header is needed at all: the frame can find it by MAC address alone.',
+          e: 'Payload: 58 bytes of ASCII, no L3 header. The destination is on-link, so L2 addressing is sufficient.' } },
+        { on: ['eth', 'data'],                 hold: 4200, caption: {
+          s: 'The envelope goes on the front: who it is for, who sent it, and a type code that says "this is an experiment, not IP". This is frame 1 in the capture.',
+          m: 'The 14-byte Ethernet header: destination MAC, source MAC, and a type code. 0x88b5 is reserved for experiments, so nothing on the LAN will mistake the text for IP. 72 bytes: this is frame 1 in the capture.',
+          e: '14-byte Ethernet II header: dst 00:0c:29:7d:e3:5c, src 00:0c:29:4b:1f:a2, EtherType 0x88b5 (IEEE local experimental). 72 bytes: frame 1.' } },
+        { on: ['eth', 'data', 'fcs'],          hold: 3800, caption: {
+          s: 'On the way out the card adds a check number on the end. The receiving card checks it and removes it, so captures never show it.',
+          m: 'On the way out, the network card appends a 4-byte CRC-32 check. The receiving card verifies it and strips it before anyone else sees the frame, which is why captures never show it. 76 bytes on the wire.',
+          e: 'NIC appends the 4-byte CRC-32 FCS; the receiving NIC verifies and strips it before the driver sees the frame. 76 bytes on the wire, 84 with preamble and SFD.' } },
+        { on: ['eth', 'data', 'fcs'], done: true, hold: 3000, caption: {
+          s: 'Sent. The switch reads the "who it is for" part, looks up which port that card is on, and sends the frame out of that port only.',
+          m: 'Sent. The switch reads the first six bytes, looks up which port 00:0c:29:7d:e3:5c is on, and sends the frame out of that port only.',
+          e: 'Sent. The switch looks up 00:0c:29:7d:e3:5c in its MAC table and forwards on that port only; no other station receives it.' } }
+      ]
+    },
+
+    'stack-build': {
+      label: 'how one web request is wrapped, layer by layer',
+      segments: [
+        { id: 'eth',  name: 'Ethernet header', bytes: 14, width: 18, fields: ['dst 00:50:56:c0:00:01 (gateway)', 'src 00:0c:29:4b:1f:a2', 'type 0x0800 = IPv4'] },
+        { id: 'ip',   name: 'IP header',       bytes: 20, width: 18, fields: ['from 192.168.110.50', 'to 10.10.20.5', 'protocol 6 = TCP', 'TTL 64'] },
+        { id: 'tcp',  name: 'TCP header',      bytes: 20, width: 18, fields: ['port 51234 → 80', 'seq 1, ack 1', 'flags PSH ACK'] },
+        { id: 'data', name: 'HTTP text',       bytes: 82, width: 32, fields: ['GET /hello.txt HTTP/1.1', 'Host: 10.10.20.5', 'User-Agent: curl/8.5.0'] },
+        { id: 'fcs',  name: 'Check (FCS)',     bytes: 4,  width: 12, fields: ['CRC-32', 'added by the card'] }
+      ],
+      stages: [
+        { on: ['data'], hold: 3200, caption: {
+          s: 'Start at the top with the message itself: the words "GET /hello.txt", which is how a program asks a web server for a file.',
+          m: 'Layer 7 first. The program (curl) writes 82 bytes of HTTP text: the request line and three headers. This is the only part a human wrote.',
+          e: 'Application layer: 82 bytes of HTTP/1.1 request, request line plus Host, User-Agent and Accept headers, terminated by an empty line.' } },
+        { on: ['tcp', 'data'], hold: 3800, caption: {
+          s: 'TCP wraps it first, adding the "department" labels: which program on each side (port 80 is the web server) and a running count so nothing is lost or out of order.',
+          m: 'Layer 4. TCP puts its 20-byte header in front: source port 51234, destination port 80, a sequence number so the server can put the bytes in order, and an acknowledgement of what it has received.',
+          e: 'Transport: TCP prepends 20 bytes (data offset 5, no options after the handshake): sport 51234, dport 80, seq 1 relative, ack 1, PSH ACK, window 64240, checksum over the pseudo-header.' } },
+        { on: ['ip', 'tcp', 'data'], hold: 3800, caption: {
+          s: 'IP wraps that, adding the real from and to addresses. This is the label that survives the whole journey.',
+          m: 'Layer 3. IP puts its 20-byte header in front of the TCP segment: from 192.168.110.50 to 10.10.20.5, protocol 6 so the far end knows TCP is inside, TTL 64.',
+          e: 'Network: IPv4 prepends 20 bytes: IHL 5, total length 122, identification, DF, TTL 64, protocol 6, header checksum, src 192.168.110.50, dst 10.10.20.5.' } },
+        { on: ['eth', 'ip', 'tcp', 'data'], hold: 4200, caption: {
+          s: 'Ethernet wraps everything last. Its label only names the next stop, the router, because the server is on another network.',
+          m: 'Layer 2, last. The driver adds the 14-byte Ethernet header. The destination MAC is the gateway, not the server, because 10.10.20.5 is not on this LAN. Type 0x0800 says an IPv4 packet is inside.',
+          e: 'Link: 14-byte Ethernet II header, dst = next-hop MAC 00:50:56:c0:00:01 from the ARP cache, src = own MAC, EtherType 0x0800. Header order on the wire is now Ethernet, IP, TCP, HTTP: the reverse of the build order.' } },
+        { on: ['eth', 'ip', 'tcp', 'data', 'fcs'], done: true, hold: 3400, caption: {
+          s: 'The card adds a small check number on the end and sends it: 136 bytes plus the check, for 82 bytes of message.',
+          m: 'The card appends the 4-byte FCS and sends the frame: 140 bytes on the wire, of which 82 are the request. Every device along the way reads only the layers it needs, starting from the outside.',
+          e: 'NIC appends the CRC-32 FCS (not captured). 136 bytes captured, 140 on the wire, 58.6% payload. Devices de-encapsulate from the outside in: switch reads L2, router L2 + L3, host all of it.' } }
       ]
     },
 
@@ -153,11 +211,26 @@
         { id: 'data', name: 'Ping data',       bytes: 56, width: 26, fields: ['56 bytes of filler', 'echoed back', 'unchanged'] }
       ],
       stages: [
-        { on: ['data'],                        hold: 2600, caption: 'The usual 56 bytes of ping filler.' },
-        { on: ['icmp', 'data'],                hold: 3000, caption: 'ICMP adds its 8-byte header: Echo Request, id 5150, sequence 1. Nothing here is different from a ping on the same LAN.' },
-        { on: ['ip', 'icmp', 'data'],          hold: 3800, caption: 'IP writes the final destination on the parcel: 10.10.20.5. This header will travel all the way to the Lab Server. Only the TTL will change, once per router.' },
-        { on: ['eth', 'ip', 'icmp', 'data'],   hold: 4600, caption: 'Now the envelope. 10.10.20.5 is not in 192.168.110.0/23, so the frame is addressed to the gateway\'s MAC, 00:50:56:c0:00:01, learned by ARP in frames 1 and 2. The destination MAC and the destination IP name two different machines. 98 bytes: frame 3 of the first capture.' },
-        { on: ['eth', 'ip', 'icmp', 'data'], done: true, hold: 3400, caption: 'Sent. The gateway opens the envelope, reads 10.10.20.5, subtracts one from the TTL, and puts the packet in a fresh envelope for the far network: frame 3 of the second capture.' }
+        { on: ['data'],                        hold: 2600, caption: {
+          s: 'The filler that every ping carries.',
+          m: 'The usual 56 bytes of ping filler.',
+          e: '56 bytes of ICMP payload: a timestamp slot followed by a byte pattern.' } },
+        { on: ['icmp', 'data'],                hold: 3000, caption: {
+          s: 'The ping message itself goes on the front: "echo request, number 1". Nothing here is different from a ping to a neighbour.',
+          m: 'ICMP adds its 8-byte header: Echo Request, id 5150, sequence 1. Nothing here is different from a ping on the same LAN.',
+          e: 'ICMP header, 8 bytes: type 8, code 0, checksum, identifier 5150, sequence 1. Identical to an on-link ping.' } },
+        { on: ['ip', 'icmp', 'data'],          hold: 3800, caption: {
+          s: 'IP writes the final destination on the parcel: the Lab Server. This label travels the whole way. Only the hop counter changes, once per router.',
+          m: 'IP writes the final destination on the parcel: 10.10.20.5. This header will travel all the way to the Lab Server. Only the TTL will change, once per router.',
+          e: 'IPv4 header, 20 bytes: src 192.168.110.50, dst 10.10.20.5, protocol 1, TTL 64, identification 0x5e21, DF set. Forwarded end to end; only TTL and the header checksum change per hop.' } },
+        { on: ['eth', 'ip', 'icmp', 'data'],   hold: 4600, caption: {
+          s: 'Now the envelope. The Lab Server is not on this network, so the envelope is addressed to the router, whose MAC address was learned in frames 1 and 2. Envelope and parcel name two different machines. This is frame 3 of the first capture.',
+          m: 'Now the envelope. 10.10.20.5 is not in 192.168.110.0/23, so the frame is addressed to the gateway\'s MAC, 00:50:56:c0:00:01, learned by ARP in frames 1 and 2. The destination MAC and the destination IP name two different machines. 98 bytes: frame 3 of the first capture.',
+          e: 'Ethernet header: dst 00:50:56:c0:00:01, the default gateway resolved by ARP in frames 1 and 2, because 10.10.20.5 fails the /23 on-link test. L2 and L3 destinations differ. 98 bytes: frame 3 of the first capture.' } },
+        { on: ['eth', 'ip', 'icmp', 'data'], done: true, hold: 3400, caption: {
+          s: 'Sent. The router opens the envelope, reads the parcel, takes one off the hop counter, and puts the parcel in a fresh envelope for the far network: frame 3 of the second capture.',
+          m: 'Sent. The gateway opens the envelope, reads 10.10.20.5, subtracts one from the TTL, and puts the packet in a fresh envelope for the far network: frame 3 of the second capture.',
+          e: 'Sent. The router strips the L2 header, decrements TTL to 63, recomputes the header checksum and re-encapsulates for the far segment: frame 3 of the second capture.' } }
       ]
     },
 
@@ -170,11 +243,26 @@
         { id: 'data',  name: 'Ping data',       bytes: 56, width: 22, fields: ['56 bytes of filler', 'echoed back', 'unchanged'] }
       ],
       stages: [
-        { on: ['data'],                          hold: 2600, caption: 'The same 56 bytes of ping filler as IPv4.' },
-        { on: ['icmp6', 'data'],                 hold: 3200, caption: 'ICMPv6 adds 8 bytes: type 128 is Echo Request (IPv4 used 8), with an identifier and sequence number exactly as before.' },
-        { on: ['ip6', 'icmp6', 'data'],          hold: 4400, caption: 'The IPv6 header: 40 bytes, of which 32 are the two addresses. Next header 58 says "ICMPv6 inside", hop limit 64 does the TTL\'s job, and there is no checksum to compute. It is always exactly this size.' },
-        { on: ['eth', 'ip6', 'icmp6', 'data'],   hold: 3800, caption: 'The same 14-byte Ethernet header as every other row, with one difference: type 0x86dd. The MAC address came from Neighbor Discovery instead of ARP. 118 bytes: frame 5 in the capture, 20 bytes more than the IPv4 ping.' },
-        { on: ['eth', 'ip6', 'icmp6', 'data'], done: true, hold: 3000, caption: 'Sent. The Echo Reply comes back as type 129, built the same way in the other direction.' }
+        { on: ['data'],                          hold: 2600, caption: {
+          s: 'The same filler as an IPv4 ping.',
+          m: 'The same 56 bytes of ping filler as IPv4.',
+          e: '56 bytes of payload, identical to the IPv4 ping.' } },
+        { on: ['icmp6', 'data'],                 hold: 3200, caption: {
+          s: 'The ping message goes on the front, with a different type number from IPv4 but the same job: "echo request, number 1".',
+          m: 'ICMPv6 adds 8 bytes: type 128 is Echo Request (IPv4 used 8), with an identifier and sequence number exactly as before.',
+          e: 'ICMPv6 header, 8 bytes: type 128, code 0, checksum over a pseudo-header, identifier 0x2a1f, sequence 1 (RFC 4443).' } },
+        { on: ['ip6', 'icmp6', 'data'],          hold: 4400, caption: {
+          s: 'The IPv6 label: twice the size of the IPv4 one, because the two addresses are four times longer. It says what is inside and carries the hop counter. It is always exactly this size.',
+          m: 'The IPv6 header: 40 bytes, of which 32 are the two addresses. Next header 58 says "ICMPv6 inside", hop limit 64 does the TTL\'s job, and there is no checksum to compute. It is always exactly this size.',
+          e: 'IPv6 header, fixed 40 bytes: version 6, payload length 64, next header 58, hop limit 64, 128-bit src and dst. No header checksum, no fragmentation fields (RFC 8200).' } },
+        { on: ['eth', 'ip6', 'icmp6', 'data'],   hold: 3800, caption: {
+          s: 'The same envelope as every other row, with one difference: the type code says IPv6. The router\'s MAC address came from Neighbor Discovery instead of ARP. This is frame 5 in the capture.',
+          m: 'The same 14-byte Ethernet header as every other row, with one difference: type 0x86dd. The MAC address came from Neighbor Discovery instead of ARP. 118 bytes: frame 5 in the capture, 20 bytes more than the IPv4 ping.',
+          e: 'Ethernet II header, EtherType 0x86dd; dst 00:50:56:c0:00:01 resolved by Neighbor Discovery (frames 3 and 4). 118 bytes: frame 5, 20 bytes more than the IPv4 equivalent.' } },
+        { on: ['eth', 'ip6', 'icmp6', 'data'], done: true, hold: 3000, caption: {
+          s: 'Sent. The reply comes back built the same way in the other direction.',
+          m: 'Sent. The Echo Reply comes back as type 129, built the same way in the other direction.',
+          e: 'Sent. The Echo Reply (type 129) is encapsulated identically in the reverse direction, hop limit 64.' } }
       ]
     }
   };
@@ -203,7 +291,7 @@
           if (on) total += g.bytes;
         });
         el.classList.toggle('done', !!st.done);
-        text.textContent = st.caption;
+        text.textContent = lv(st.caption);
         bytesEl.textContent = total;
         stepEl.textContent = 'step ' + (k + 1) + ' of ' + n;
         Array.prototype.forEach.call(dots, function (d, j) { d.classList.toggle('on', j === k); });
@@ -250,7 +338,7 @@
     var hosts = (SITE.hosts || []).map(function (x) {
       return '<tr><td>' + esc(x.name) + '</td><td>' + esc(x.mac) + '</td><td>' + esc(x.ip) + '</td><td>' + esc(x.ip6 || '') + '</td><td>' + esc(x.role) + '</td></tr>';
     }).join('');
-    main.innerHTML =
+    content.innerHTML =
       '<article class="welcome">' +
       '<h1>' + esc(SITE.title) + '</h1>' +
       '<p class="lead">How data really moves: the frame that crosses your LAN, the packet that crosses the internet, and the two kinds of address that make them work.</p>' +
@@ -260,7 +348,9 @@
       '<li><b>Row 2, Frame.</b> Two machines on one switch talk by MAC address alone. A frame with no IP in it at all, then an ordinary ping to a neighbour.</li>' +
       '<li><b>Row 3, Frame vs packet.</b> The same ping captured on both sides of a router. The MAC addresses change, the IP addresses do not.</li>' +
       '<li><b>Row 4, IPv6.</b> The same picture with 128-bit addresses, no ARP and no broadcast.</li>' +
+      '<li><b>Row 5, How a packet is built.</b> One small web request with every layer inside it: which order the headers go on, which order they come off, and whether IP can be skipped.</li>' +
       '</ol>' +
+      '<p class="hint"><b>Reading level.</b> The <b>Simple</b>, <b>Moderate</b> and <b>Engineer</b> buttons at the top right change how deep every explanation goes. Simple is the big idea in plain words, Moderate is CCNA-student depth, Engineer is the full technical detail kept short. Your choice is remembered on this browser, and a link with <code>?level=simple</code> (or moderate, engineer) opens the site at that level.</p>' +
       '<p>Every row with a capture has a Wireshark-style packet table at the bottom. Click a packet to open it layer by layer, and use the download button to open the same file in Wireshark. The animations have back, pause and forward buttons.</p>' +
       '<h2>The lab machines</h2>' +
       '<div class="table-wrap"><table class="lab hosts"><tr><th>Machine</th><th>MAC address</th><th>IPv4</th><th>IPv6</th><th>Role</th></tr>' + hosts + '</table></div>' +
@@ -299,30 +389,31 @@
 
   function columnsHtml(cols) {
     return '<div class="cols">' + cols.map(function (c) {
-      return '<div class="col"><h3>' + esc(c.h) + '</h3>' + (c.p || []).map(function (p) { return '<p>' + p + '</p>'; }).join('') +
-        (c.cmd ? '<pre class="cmd">' + esc(c.cmd) + '</pre>' : '') + (c.after ? '<p>' + c.after + '</p>' : '') + '</div>';
+      var after = lv(c.after);
+      return '<div class="col"><h3>' + esc(c.h) + '</h3>' + lv(c.p || []).map(function (p) { return '<p>' + p + '</p>'; }).join('') +
+        (c.cmd ? '<pre class="cmd">' + esc(c.cmd) + '</pre>' : '') + (after ? '<p>' + after + '</p>' : '') + '</div>';
     }).join('') + '</div>';
   }
 
   function tableHtml(rows, cls) {
     var h = ['<div class="table-wrap"><table class="lab ' + (cls || 'compare') + '">'];
-    rows.forEach(function (row, i) { h.push('<tr>' + row.map(function (c, j) { return (i === 0 || j === 0 ? '<th>' : '<td>') + c + (i === 0 || j === 0 ? '</th>' : '</td>'); }).join('') + '</tr>'); });
+    rows.map(lv).forEach(function (row, i) { h.push('<tr>' + row.map(function (c, j) { return (i === 0 || j === 0 ? '<th>' : '<td>') + c + (i === 0 || j === 0 ? '</th>' : '</td>'); }).join('') + '</tr>'); });
     h.push('</table></div>');
     return h.join('');
   }
 
   function sectionHtml(s) {
     var h = ['<section><h2>' + esc(s.h) + '</h2>'];
-    (s.p || []).forEach(function (p) { h.push('<p>' + p + '</p>'); });
+    lv(s.p || []).forEach(function (p) { h.push('<p>' + p + '</p>'); });
     if (s.anatomy) h.push(anatomyHtml(s.anatomy));
-    if (s.steps) { h.push('<ol class="steps">'); s.steps.forEach(function (t) { h.push('<li>' + t + '</li>'); }); h.push('</ol>'); }
+    if (s.steps) { h.push('<ol class="steps">'); lv(s.steps).forEach(function (t) { h.push('<li>' + t + '</li>'); }); h.push('</ol>'); }
     if (s.anim && ANIMATIONS[s.anim]) h.push(assemblyHtml(s.anim, ANIMATIONS[s.anim]));
     if (s.packet) h.push('<div class="peek" data-file="' + esc(s.packet.file) + '" data-no="' + s.packet.no + '" data-note="' + esc(s.packet.note || '') + '"><p class="loading">Loading frame ' + s.packet.no + ' of ' + esc(s.packet.file) + ' ...</p></div>');
     if (s.compare) h.push('<div class="compare-wrap cmp-box" data-a="' + esc(JSON.stringify(s.compare.a)) + '" data-b="' + esc(JSON.stringify(s.compare.b)) + '"><p class="loading">Loading both captures...</p></div>');
     if (s.tool === 'mac') h.push('<div class="seen" id="seen"><p class="loading">Looking for the frame that carried your request...</p></div>');
     if (s.columns) h.push(columnsHtml(s.columns));
     if (s.table) h.push(tableHtml(s.table));
-    (s.after || []).forEach(function (p) { h.push('<p>' + p + '</p>'); });
+    lv(s.after || []).forEach(function (p) { h.push('<p>' + p + '</p>'); });
     h.push('</section>');
     return h.join('');
   }
@@ -332,25 +423,25 @@
     h.push('<article class="lesson" id="lesson-' + lesson.id + '">');
     h.push('<p class="crumb">Row ' + (index + 1) + ' of ' + LESSONS.length + '</p>');
     h.push('<h1>' + esc(lesson.title) + ' <small>' + esc(lesson.subtitle) + '</small></h1>');
-    h.push('<p class="lead">' + esc(lesson.oneLiner) + '</p>');
+    h.push('<p class="lead">' + esc(lv(lesson.oneLiner)) + '</p>');
     var facts = lesson.facts || [['Where it lives', lesson.layer], ['How this was made', '<code>' + esc(lesson.command) + '</code>']];
-    h.push('<div class="facts">' + facts.map(function (f) { return '<div><span class="k">' + esc(f[0]) + '</span><span class="v">' + (lesson.facts ? esc(f[1]) : f[1]) + '</span></div>'; }).join('') + '</div>');
+    h.push('<div class="facts">' + facts.map(function (f) { return '<div><span class="k">' + esc(f[0]) + '</span><span class="v">' + (lesson.facts ? esc(lv(f[1])) : lv(f[1])) + '</span></div>'; }).join('') + '</div>');
     lesson.sections.forEach(function (s) { h.push(sectionHtml(s)); });
     if (lesson.steps) h.push('<section><h2>The conversation, step by step</h2><p class="hint">Orange lines are frames sent to everyone (broadcast) or to a group (multicast).</p><div class="diagram">' + diagram(lesson) + '</div></section>');
     if (lesson.lookFor) {
-      h.push('<section><h2>' + esc(lesson.lookForTitle || 'What to look for') + '</h2><ul class="lookfor">');
-      lesson.lookFor.forEach(function (t) { h.push('<li>' + esc(t) + '</li>'); });
+      h.push('<section><h2>' + esc(lv(lesson.lookForTitle) || 'What to look for') + '</h2><ul class="lookfor">');
+      lv(lesson.lookFor).forEach(function (t) { h.push('<li>' + esc(t) + '</li>'); });
       h.push('</ul></section>');
     }
     var caps = lesson.captures || (lesson.file ? [{ file: lesson.file }] : []);
     caps.forEach(function (c) {
       h.push('<section class="packets"><div class="packets-head"><h2>' + esc(c.title || 'The packets') + '</h2><div class="dl-group">' +
         '<a class="dl" href="pcaps/' + encodeURIComponent(c.file) + '" download>Download .pcap</a></div></div>' +
-        '<p class="hint">' + (c.hint ? esc(c.hint) + ' ' : 'Click a packet to expand its details. ') + 'File: <code>' + esc(c.file) + '</code></p>' +
+        '<p class="hint">' + (c.hint ? esc(lv(c.hint)) + ' ' : 'Click a packet to expand its details. ') + 'File: <code>' + esc(c.file) + '</code></p>' +
         '<div class="table-wrap pktbox" data-file="' + esc(c.file) + '"><p class="loading">Loading capture...</p></div></section>');
     });
     h.push('</article>');
-    main.innerHTML = h.join('');
+    content.innerHTML = h.join('');
     main.scrollTop = 0;
     startAnimations();
     loadPeeks();
@@ -561,6 +652,8 @@
   buildMenu();
   buildNav();
   (function () { var c = document.getElementById('net-cidr'); if (c) c.textContent = SITE.labNetwork; })();
+  window.rerender = function () { var y = main.scrollTop; route(); main.scrollTop = y; };
+  wireLevelBar(document.getElementById('level-bar'));
   window.addEventListener('hashchange', route);
   route();
 })();

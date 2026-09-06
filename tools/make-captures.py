@@ -10,6 +10,7 @@ router. Checksums are real, so Wireshark shows them as good.
   site/pcaps/packet-lan-side.pcap   a ping to another network, seen on the LAN
   site/pcaps/packet-far-side.pcap   the same ping, seen on the far network
   site/pcaps/ipv6-lan-ping.pcap     IPv6: router discovery, neighbour discovery, ping
+  site/pcaps/stack-http-get.pcap    one small HTTP request: every layer in one frame
 
 Usage:  python3 tools/make-captures.py
 """
@@ -58,6 +59,16 @@ def ipv4(src, dst, proto, payload, ident, ttl=64, df=True):
 def icmp_echo(reply, ident, seq, data=PING_DATA):
     msg = struct.pack('!BBHHH', 0 if reply else 8, 0, 0, ident, seq) + data
     return msg[:2] + struct.pack('!H', checksum(msg)) + msg[4:]
+
+def tcp(src, dst, sport, dport, seq, ack, flags, payload=b'', window=64240, options=b''):
+    """flags: string of letters from S A F P R. options are padded to 4 bytes."""
+    while len(options) % 4: options += b'\x00'
+    fl = sum({'F': 1, 'S': 2, 'R': 4, 'P': 8, 'A': 16}[c] for c in flags)
+    off = (5 + len(options) // 4) << 4
+    hdr = struct.pack('!HHIIBBHHH', sport, dport, seq, ack, off, fl, window, 0, 0) + options
+    seg = hdr + payload
+    pseudo = ip2b(src) + ip2b(dst) + struct.pack('!BBH', 0, 6, len(seg))
+    return seg[:16] + struct.pack('!H', checksum(pseudo + seg)) + seg[18:]
 
 def arp(op, sha, spa, tha, tpa):
     return struct.pack('!HHBBH', 1, 0x0800, 6, 4, op) + sha + ip2b(spa) + tha + ip2b(tpa)
@@ -148,8 +159,28 @@ def ipv6_lan_ping():
         c.add(eth(VM_MAC, GW_MAC, 0x86dd, ipv6(GW_G, VM_G, 58, icmp6(GW_G, VM_G, rep), hop=64)), 0.000377)
     c.close()
 
+# ---------- 4. stack-http-get: one small HTTP request, so every layer shows up in one frame ----------
+def stack_http_get():
+    d = Pcap(os.path.join(PCAPS, 'stack-http-get.pcap'), t0=1757100120.250000)
+    cport, sport = 51234, 80
+    cseq, sseq = 0x1a2b3c4d, 0x7e8f9a0b
+    mss = b'\x02\x04\x05\xb4'                       # option 2: MSS 1460
+    ids = [0x5f10, 0x5f11, 0x5f12, 0x5f13]; sids = [0x0000, 0x9c41, 0x9c42]
+    req = (b'GET /hello.txt HTTP/1.1\r\nHost: 10.10.20.5\r\nUser-Agent: curl/8.5.0\r\nAccept: */*\r\n\r\n')
+    body = b'Hello from the Lab Server. One frame, every layer.\n'
+    resp = (b'HTTP/1.1 200 OK\r\nServer: nginx/1.27.0\r\nContent-Type: text/plain\r\nContent-Length: ' + str(len(body)).encode() + b'\r\nConnection: keep-alive\r\n\r\n' + body)
+    def c2s(seg, ident, dt): d.add(eth(GW_MAC, VM_MAC, 0x0800, ipv4(VM_IP, SRV_IP, 6, seg, ident, ttl=64)), dt)
+    def s2c(seg, ident, dt): d.add(eth(VM_MAC, GW_MAC, 0x0800, ipv4(SRV_IP, VM_IP, 6, seg, ident, ttl=63)), dt)
+    c2s(tcp(VM_IP, SRV_IP, cport, sport, cseq, 0, 'S', options=mss), ids[0], 0)                                   # 1 SYN
+    s2c(tcp(SRV_IP, VM_IP, sport, cport, sseq, cseq + 1, 'SA', options=mss), sids[0], 0.001312)                    # 2 SYN-ACK
+    c2s(tcp(VM_IP, SRV_IP, cport, sport, cseq + 1, sseq + 1, 'A'), ids[1], 0.000061)                              # 3 ACK
+    c2s(tcp(VM_IP, SRV_IP, cport, sport, cseq + 1, sseq + 1, 'PA', req), ids[2], 0.000148)                        # 4 GET
+    s2c(tcp(SRV_IP, VM_IP, sport, cport, sseq + 1, cseq + 1 + len(req), 'PA', resp), sids[1], 0.001874)           # 5 200 OK
+    c2s(tcp(VM_IP, SRV_IP, cport, sport, cseq + 1 + len(req), sseq + 1 + len(resp), 'A'), ids[3], 0.000052)      # 6 ACK
+    d.close()
+
 if __name__ == '__main__':
     os.makedirs(PCAPS, exist_ok=True)
-    frame_lan_peer(); packet_both_sides(); ipv6_lan_ping()
-    for n in ('frame-lan-peer', 'packet-lan-side', 'packet-far-side', 'ipv6-lan-ping'):
+    frame_lan_peer(); packet_both_sides(); ipv6_lan_ping(); stack_http_get()
+    for n in ('frame-lan-peer', 'packet-lan-side', 'packet-far-side', 'ipv6-lan-ping', 'stack-http-get'):
         print('wrote', n + '.pcap', os.path.getsize(os.path.join(PCAPS, n + '.pcap')), 'bytes')
