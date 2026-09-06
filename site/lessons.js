@@ -29,7 +29,7 @@
  */
 var SITE = {
   title: 'Frames & Packets',
-  image: 'professorcam/frames',      /* Docker Hub image of this site */
+  image: 'professorcryan/frames',      /* Docker Hub image of this site */
   port: 8081,
   labName: 'Lab WiFi',
   labNetwork: '192.168.110.0/23',

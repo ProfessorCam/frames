@@ -22,7 +22,7 @@ docker compose up -d --build
 Then open <http://localhost:8081>. Stop it with `docker compose down`. Or, from Docker Hub:
 
 ```sh
-docker run -d --name frames --network host --restart unless-stopped professorcam/frames
+docker run -d --name frames --network host --restart unless-stopped professorcryan/frames
 ```
 
 The container uses `network_mode: host` so that `ip neigh` inside it is the real neighbour
