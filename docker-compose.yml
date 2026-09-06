@@ -1,0 +1,8 @@
+services:
+  frames:
+    build: .
+    container_name: frames
+    # Share the host's network so the server's neighbour table holds the real
+    # MAC addresses of the machines on the LAN. The site listens on port 8081.
+    network_mode: host
+    restart: unless-stopped
