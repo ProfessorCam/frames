@@ -33,7 +33,7 @@
  * column p/after, capture hints, lookFor bullets, animation captions) may be a plain string
  * (the same at every level) or { s: ..., m: ..., e: ... } for Simple / Moderate / Engineer.
  * A missing key falls back to m; '' leaves that paragraph out at that level. Refer to other
- * rows as {{row:id}} / {{Row:id}}, which becomes "row N" when the page is drawn. See level.js.
+ * rows as {{row:id}} / {{Row:id}}, which becomes the row's title in quotes when drawn. See level.js.
  */
 var SITE = {
   title: 'Frames & Packets',
@@ -45,10 +45,10 @@ var SITE = {
   /* The machines that appear in the captures. */
   hosts: [
     { name: 'Student VM', mac: '00:0c:29:4b:1f:a2', ip: '192.168.110.50', ip6: '2001:db8:110:0:20c:29ff:fe4b:1fa2', role: 'the machine most captures were taken on' },
-    { name: 'Lab PC 2', mac: '00:0c:29:7d:e3:5c', ip: '192.168.110.60', ip6: '', role: 'another VM on the same LAN (row 2)' },
+    { name: 'Lab PC 2', mac: '00:0c:29:7d:e3:5c', ip: '192.168.110.60', ip6: '', role: 'another VM on the same LAN (\u201cFrame\u201d row)' },
     { name: 'Gateway, LAN side', mac: '00:50:56:c0:00:01', ip: '192.168.110.1', ip6: '2001:db8:110::1', role: 'the router: one foot on each network' },
     { name: 'Gateway, far side', mac: '00:50:56:c0:00:08', ip: '10.10.20.1', ip6: '', role: 'the same router, its other network card' },
-    { name: 'Lab Server', mac: '00:0c:29:a1:b2:c3', ip: '10.10.20.5', ip6: '', role: 'on the far network, behind the router (row 3)' }
+    { name: 'Lab Server', mac: '00:0c:29:a1:b2:c3', ip: '10.10.20.5', ip6: '', role: 'on the far network, behind the router (\u201cFrame vs packet\u201d row)' }
   ],
   /* Top menu. href null = not built yet; current: true marks the site you are on. */
   menu: [

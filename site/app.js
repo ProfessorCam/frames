@@ -65,7 +65,6 @@
       b.type = 'button';
       b.dataset.id = l.id;
       b.innerHTML =
-        '<span class="num">' + (i + 1) + '</span>' +
         '<span class="text"><span class="title">' + esc(l.title) + '</span>' +
         '<span class="sub">' + esc(l.subtitle) + '</span></span>' +
         (l.stack !== undefined ? '<span class="lay">' + esc(l.chip || STACK_CHIPS[l.stack] || l.stack) + '</span>' : '');
@@ -344,19 +343,19 @@
       '<p class="lead">How data really moves: the frame that crosses your LAN, the packet that crosses the internet, and the two kinds of address that make them work.</p>' +
       '<h2>How to use this page</h2>' +
       '<ol>' +
-      '<li><b>Row 1, MAC address.</b> The address printed on every network card: what it looks like, who hands it out, and how to find your own on Windows, Linux and macOS.</li>' +
-      '<li><b>Row 2, Frame.</b> Two machines on one switch talk by MAC address alone. A frame with no IP in it at all, then an ordinary ping to a neighbour.</li>' +
-      '<li><b>Row 3, Frame vs packet.</b> The same ping captured on both sides of a router. The MAC addresses change, the IP addresses do not.</li>' +
-      '<li><b>Row 4, IPv6.</b> The same picture with 128-bit addresses, no ARP and no broadcast.</li>' +
-      '<li><b>Row 5, How a packet is built.</b> One small web request with every layer inside it: which order the headers go on, which order they come off, and whether IP can be skipped.</li>' +
+      '<li><b>MAC address.</b> The address printed on every network card: what it looks like, who hands it out, and how to find your own on Windows, Linux and macOS.</li>' +
+      '<li><b>Frame.</b> Two machines on one switch talk by MAC address alone. A frame with no IP in it at all, then an ordinary ping to a neighbour.</li>' +
+      '<li><b>Frame vs packet.</b> The same ping captured on both sides of a router. The MAC addresses change, the IP addresses do not.</li>' +
+      '<li><b>IPv6.</b> The same picture with 128-bit addresses, no ARP and no broadcast.</li>' +
+      '<li><b>How a packet is built.</b> One small web request with every layer inside it: which order the headers go on, which order they come off, and whether IP can be skipped.</li>' +
       '</ol>' +
       '<p class="hint"><b>Reading level.</b> The <b>Simple</b>, <b>Moderate</b> and <b>Engineer</b> buttons at the top right change how deep every explanation goes. Simple is the big idea in plain words, Moderate is CCNA-student depth, Engineer is the full technical detail kept short. Your choice is remembered on this browser, and a link with <code>?level=simple</code> (or moderate, engineer) opens the site at that level.</p>' +
       '<p>Every row with a capture has a Wireshark-style packet table at the bottom. Click a packet to open it layer by layer, and use the download button to open the same file in Wireshark. The animations have back, pause and forward buttons.</p>' +
       '<h2>The lab machines</h2>' +
       '<div class="table-wrap"><table class="lab hosts"><tr><th>Machine</th><th>MAC address</th><th>IPv4</th><th>IPv6</th><th>Role</th></tr>' + hosts + '</table></div>' +
-      '<p class="hint">' + esc(SITE.labName) + ' is ' + esc(SITE.labNetwork) + '; the far network on row 3 is ' + esc(SITE.farNetwork) + '. The captures were built to match these machines byte for byte (see <code>tools/make-captures.py</code> in the repository), which is how the same ping can be shown from both sides of the router with clean timestamps. Wireshark reads them like any other capture, checksums included.</p>' +
+      '<p class="hint">' + esc(SITE.labName) + ' is ' + esc(SITE.labNetwork) + '; the far network on the \u201cFrame vs packet\u201d row is ' + esc(SITE.farNetwork) + '. The captures were built to match these machines byte for byte (see <code>tools/make-captures.py</code> in the repository), which is how the same ping can be shown from both sides of the router with clean timestamps. Wireshark reads them like any other capture, checksums included.</p>' +
       '<h2>Run it on your own LAN</h2>' +
-      '<p class="hint">The site is also published as a Docker image. Run it on a machine on the lab network and row 1 shows every visitor their own MAC address, read from the server\'s neighbour table:</p>' +
+      '<p class="hint">The site is also published as a Docker image. Run it on a machine on the lab network and the \u201cMAC address\u201d row shows every visitor their own MAC address, read from the server\'s neighbour table:</p>' +
       '<pre class="cmd">docker run --rm -it --name frames --network host ' + esc(SITE.image) + '</pre>' +
       '<p class="hint">Then open <a href="http://127.0.0.1:' + SITE.port + '/">http://127.0.0.1:' + SITE.port + '/</a> on that machine, or its LAN address followed by <code>:' + SITE.port + '</code> from another computer on the LAN. The container runs in the foreground; press Ctrl+C to stop it, and it removes itself.</p>' +
       '<h2>Reading the packet table</h2>' +
@@ -421,7 +420,7 @@
   function renderLesson(lesson, index) {
     var h = [];
     h.push('<article class="lesson" id="lesson-' + lesson.id + '">');
-    h.push('<p class="crumb">Row ' + (index + 1) + ' of ' + LESSONS.length + '</p>');
+    h.push('<p class="crumb">' + esc(STACK_GROUPS[lesson.stack] || 'Lesson') + '</p>');
     h.push('<h1>' + esc(lesson.title) + ' <small>' + esc(lesson.subtitle) + '</small></h1>');
     h.push('<p class="lead">' + esc(lv(lesson.oneLiner)) + '</p>');
     var facts = lesson.facts || [['Where it lives', lesson.layer], ['How this was made', '<code>' + esc(lesson.command) + '</code>']];
@@ -546,7 +545,7 @@
         '<p>That is the source address of the frame that carried your request (from ' + esc(ip) + ') to this server, as recorded in the server\'s neighbour table on its card <code>' + esc(hit.dev) + '</code>. You are on the same LAN as the server, which is the only reason it can see it. Prefix <code>' + esc(hit.lladdr.slice(0, 8)) + '</code>: compare it with the table above.</p>';
     } else {
       box.className = 'seen';
-      box.innerHTML = '<p><b>Your request came from ' + esc(ip) + ', which is not on the server\'s LAN.</b> The frame that carried it was replaced by a router on the way, so the server saw the router\'s MAC address, not yours (row 3 shows exactly this). Connect to the lab network and reload.</p>';
+      box.innerHTML = '<p><b>Your request came from ' + esc(ip) + ', which is not on the server\'s LAN.</b> The frame that carried it was replaced by a router on the way, so the server saw the router\'s MAC address, not yours (the \u201cFrame vs packet\u201d row shows exactly this). Connect to the lab network and reload.</p>';
     }
   }
 

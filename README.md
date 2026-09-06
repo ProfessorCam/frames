@@ -5,11 +5,11 @@ in the right column, a plain-English lesson, a packet-assembly animation with ba
 forward buttons, a sequence diagram, a "what to look for" checklist, and the real bytes of a
 `.pcap` file decoded in the browser in a Wireshark-style table.
 
-Rows: **1 MAC address** (what it is, whose prefix it is, how to find your own on Windows, Linux
-and macOS), **2 Frame** (two machines on one switch: a frame with no IP inside, then ARP and a
-ping), **3 Frame vs packet** (the same ping captured on both sides of a router, compared field by
-field), **4 IPv6** (addresses, router and neighbour discovery, ping, and the header next to IPv4's),
-**5 How a packet is built** (one small HTTP request with every layer inside it: headers go on from
+Rows, grouped by layer: **MAC address** (what it is, whose prefix it is, how to find your own on Windows, Linux
+and macOS), **Frame** (two machines on one switch: a frame with no IP inside, then ARP and a
+ping), **Frame vs packet** (the same ping captured on both sides of a router, compared field by
+field), **IPv6** (addresses, router and neighbour discovery, ping, and the header next to IPv4's),
+**How a packet is built** (one small HTTP request with every layer inside it: headers go on from
 the top down and come off from the bottom up, and what a layer-2-only conversation can and cannot do).
 
 No frameworks, no build step: plain HTML, CSS and JavaScript. Published to GitHub Pages at
@@ -34,7 +34,7 @@ on the LAN.
 The container uses `network_mode: host` so that `ip neigh` inside it is the real neighbour
 (ARP / NDP) table of the machine running Docker. `neigh.sh` writes that table to
 `site/neighbors.json` every 3 seconds, nginx answers `/whoami` with the visitor's IP address, and
-row 1 looks the visitor up in the table and shows their MAC address. That only works for visitors
+the MAC address row looks the visitor up in the table and shows their MAC address. That only works for visitors
 on the same LAN as the server, which is the point of the lesson; from anywhere else, and on GitHub
 Pages, the box explains why the server cannot see it.
 
@@ -53,7 +53,7 @@ The mechanism is `site/level.js`, identical on every Packet Lessons site. In `si
 piece of prose can be a plain string (same at every level) or an object with `s`, `m` and `e`
 keys, and arrays of paragraphs may mix the two. A missing key falls back to Moderate; an empty
 string leaves that paragraph out at that level. Rows refer to each other with `{{row:id}}`, which
-becomes "row N" when the page is drawn, so reordering rows never breaks the text. Each row's `stack`
+becomes the row's title in quotes when the page is drawn, so reordering rows never breaks the text. Each row's `stack`
 field (`2`, `3`, `4`, `7`, or a word such as `tls`) groups the sidebar by layer.
 
 ## Layout
@@ -89,7 +89,7 @@ python3 tools/make-captures.py
 tcpdump -nn -e -vv -r site/pcaps/ipv6-lan-ping.pcap
 ```
 
-The raw frames on row 2 (EtherType 0x88B5, reserved by the IEEE for local experiments) can be
+The raw frames on the Frame row (EtherType 0x88B5, reserved by the IEEE for local experiments) can be
 reproduced on real machines with `tools/rawframe.py`: run `listen` on one, `send` on the other,
 and capture with `tcpdump -i <iface> -w frame.pcap ether proto 0x88b5`.
 
