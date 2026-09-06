@@ -19,11 +19,15 @@ No frameworks, no build step: plain HTML, CSS and JavaScript. Published to GitHu
 docker compose up -d --build
 ```
 
-Then open <http://localhost:8081>. Stop it with `docker compose down`. Or, from Docker Hub:
+Then open <http://127.0.0.1:8081>. Stop it with `docker compose down`. Or, from Docker Hub, in the foreground
+(Ctrl+C stops and removes it):
 
 ```sh
-docker run -d --name frames --network host --restart unless-stopped professorcryan/frames
+docker run --rm -it --name frames --network host professorcryan/frames
 ```
+
+Then open <http://127.0.0.1:8081> on that machine, or `http://<its LAN address>:8081` from another computer
+on the LAN.
 
 The container uses `network_mode: host` so that `ip neigh` inside it is the real neighbour
 (ARP / NDP) table of the machine running Docker. `neigh.sh` writes that table to

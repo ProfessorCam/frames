@@ -132,14 +132,12 @@
     'raw-frame': {
       label: 'how a frame with nothing but MAC addresses is built',
       segments: [
-        { id: 'eth',  name: 'Ethernet header', bytes: 14, width: 26, fields: ['dst 00:0c:29:7d:e3:5c', 'src 00:0c:29:4b:1f:a2', 'type 0x88b5 = experiment'] },
-        { id: 'noip', name: 'IP header',       bytes: 0,  width: 18, ghost: true, fields: ['none', 'no IP address', 'anywhere'] },
-        { id: 'data', name: 'Data',            bytes: 58, width: 36, fields: ['"Hello Lab PC 2. This frame', 'has no IP address in it', 'at all."'] },
+        { id: 'eth',  name: 'Ethernet header', bytes: 14, width: 30, fields: ['dst 00:0c:29:7d:e3:5c', 'src 00:0c:29:4b:1f:a2', 'type 0x88b5 = experiment'] },
+        { id: 'data', name: 'Data',            bytes: 58, width: 46, fields: ['"Hello Lab PC 2. This frame', 'has no IP address in it', 'at all."'] },
         { id: 'fcs',  name: 'Check (FCS)',     bytes: 4,  width: 16, fields: ['CRC-32', 'added by the card', 'never captured'] }
       ],
       stages: [
-        { on: ['data'],                        hold: 3000, caption: 'Start with what we want to send: 58 bytes of text.' },
-        { on: ['noip', 'data'],                hold: 3600, caption: 'Normally an IP header would go in front. Not this time: the receiver is on the same LAN, and a frame can find it by MAC address alone.' },
+        { on: ['data'],                        hold: 3000, caption: 'Start with what we want to send: 58 bytes of text. The receiver is on the same LAN, so no IP header is needed at all: the frame can find it by MAC address alone.' },
         { on: ['eth', 'data'],                 hold: 4200, caption: 'The 14-byte Ethernet header: destination MAC, source MAC, and a type code. 0x88b5 is reserved for experiments, so nothing on the LAN will mistake the text for IP. 72 bytes: this is frame 1 in the capture.' },
         { on: ['eth', 'data', 'fcs'],          hold: 3800, caption: 'On the way out, the network card appends a 4-byte CRC-32 check. The receiving card verifies it and strips it before anyone else sees the frame, which is why captures never show it. 76 bytes on the wire.' },
         { on: ['eth', 'data', 'fcs'], done: true, hold: 3000, caption: 'Sent. The switch reads the first six bytes, looks up which port 00:0c:29:7d:e3:5c is on, and sends the frame out of that port only.' }
@@ -269,8 +267,8 @@
       '<p class="hint">' + esc(SITE.labName) + ' is ' + esc(SITE.labNetwork) + '; the far network on row 3 is ' + esc(SITE.farNetwork) + '. The captures were built to match these machines byte for byte (see <code>tools/make-captures.py</code> in the repository), which is how the same ping can be shown from both sides of the router with clean timestamps. Wireshark reads them like any other capture, checksums included.</p>' +
       '<h2>Run it on your own LAN</h2>' +
       '<p class="hint">The site is also published as a Docker image. Run it on a machine on the lab network and row 1 shows every visitor their own MAC address, read from the server\'s neighbour table:</p>' +
-      '<pre class="cmd">docker run -d --name frames --network host --restart unless-stopped ' + esc(SITE.image) + '</pre>' +
-      '<p class="hint">Then open <a href="http://localhost:' + SITE.port + '/">http://localhost:' + SITE.port + '/</a>, or the machine\'s address from another computer on the LAN. Stop it with <code>docker rm -f frames</code>.</p>' +
+      '<pre class="cmd">docker run --rm -it --name frames --network host ' + esc(SITE.image) + '</pre>' +
+      '<p class="hint">Then open <a href="http://127.0.0.1:' + SITE.port + '/">http://127.0.0.1:' + SITE.port + '/</a> on that machine, or its LAN address followed by <code>:' + SITE.port + '</code> from another computer on the LAN. The container runs in the foreground; press Ctrl+C to stop it, and it removes itself.</p>' +
       '<h2>Reading the packet table</h2>' +
       '<ul>' +
       '<li><b>Source</b> and <b>Destination</b> show MAC addresses when there is no IP packet in the frame (the raw frames and ARP), and IP addresses otherwise. Open a packet to see both.</li>' +
