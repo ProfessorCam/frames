@@ -54,7 +54,8 @@ var SITE = {
   menu: [
     { label: 'Frames & Packets', href: '#', current: true },
     { label: 'Protocols', href: 'https://professorcam.github.io/pcap/' },
-    { label: 'Encryption and Protocols', href: 'https://professorcam.github.io/encryption/' }
+    { label: 'Encryption and Protocols', href: 'https://professorcam.github.io/encryption/' },
+    { label: 'Packet Forensics', href: 'https://professorcam.github.io/forensics/' }
   ]
 };
 
